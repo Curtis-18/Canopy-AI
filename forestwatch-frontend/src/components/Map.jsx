@@ -123,12 +123,13 @@ function FlyTo({ point }) {
   return null
 }
 
+const ESRI_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+
 export default function Map({
   selectedPoint, alertLevel,
   onMapClick, radiusKm,
   tiles, tilesLoading,
   flyToPoint,
-  basemapUrl,
 }) {
   const color   = RISK_COLORS[alertLevel] || '#22c55e'
   const hasTiles = !!tiles
@@ -136,9 +137,12 @@ export default function Map({
   const [ugandaGeojson, setUgandaGeojson] = useState(null)
   
   useEffect(() => {
-    fetch('https://github.com/wmgeolab/geoBoundaries/raw/main/releaseData/gbOpen/UGA/ADM0/geoBoundaries-UGA-ADM0_simplified.geojson')
+    fetch('https://raw.githubusercontent.com/wmgeolab/geoBoundaries/main/releaseData/gbOpen/UGA/ADM0/geoBoundaries-UGA-ADM0_simplified.geojson')
       .then(r => r.json())
-      .then(data => setUgandaGeojson(data))
+      .then(data => {
+        console.log(" Uganda boundary successfully loaded", data)
+        setUgandaGeojson(data)
+      })
       .catch(e => console.error("Failed to load Uganda GeoJSON:", e))
   }, [])
 
@@ -316,13 +320,13 @@ export default function Map({
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
       >
-        {/* ── Basemap: GEE satellite or dark fallback ── */}
-        {basemapUrl && layers.satellite ? (
+        {/* ── Basemap: ESRI World Imagery (instant, sharp, no patches) ── */}
+        {layers.satellite ? (
           <TileLayer
-            key={basemapUrl}
-            url={basemapUrl}
-            attribution="Google Earth Engine / Sentinel-2"
-            opacity={1}
+            url={ESRI_URL}
+            attribution="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
+            maxNativeZoom={18}
+            maxZoom={20}
           />
         ) : (
           <TileLayer
@@ -339,7 +343,7 @@ export default function Map({
         {ugandaGeojson && (
           <GeoJSON 
             data={ugandaGeojson} 
-            style={{ color: '#22C55E', weight: 2, fill: false, opacity: 0.8 }} 
+            style={{ color: '#FFFFFF', weight: 3, fill: false, opacity: 0.9 }} 
           />
         )}
 

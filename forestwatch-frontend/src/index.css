@@ -107,3 +107,13 @@ select:focus, input:focus {
 .fade-up { animation: fadeUp 0.4s ease forwards; }
 .slide-in { animation: slideIn 0.3s ease forwards; }
 .glow { animation: glow 2s ease-in-out infinite; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes indeterminate {
+  0%   { transform: translateX(-100%); width: 40%; }
+  50%  { transform: translateX(150%);  width: 60%; }
+  100% { transform: translateX(300%);  width: 40%; }
+}

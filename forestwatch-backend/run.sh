@@ -1,7 +1,7 @@
 #!/bin/bash
-# Quick start script for ForestWatch backend with optimizations
+# Quick start script for Canopy AI backend with optimizations
 
-echo "🚀 ForestWatch Backend - Performance Optimized"
+echo "🚀 Canopy AI Backend - Performance Optimized"
 echo "=============================================="
 echo ""
 

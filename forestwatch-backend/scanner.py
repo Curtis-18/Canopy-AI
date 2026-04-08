@@ -1,5 +1,5 @@
 """
-ForestWatch — Automated Weekly Forest Scanner
+Canopy AI — Automated Weekly Forest Scanner
 Runs background scans on all monitored forests and generates deforestation alerts.
 """
 
@@ -14,7 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from analyzer import (
-    FORESTS,
+    FORESTS, FOREST_PROXIMITY,
     analyze_location_gee as analyze,
     uganda_risk_score,
     score_to_alert,
@@ -80,8 +80,11 @@ def run_weekly_scan():
             print(f"  Scanning {forest_name} ({lat}, {lng})...")
             data = analyze(lat, lng, 2025, 10.0)
 
+            prox  = FOREST_PROXIMITY.get(forest_name, {})
             score = uganda_risk_score(
-                data["cleared_pct"], data["degraded_pct"], data["ndvi_mean"]
+                data["cleared_pct"], data["degraded_pct"], data["ndvi_mean"],
+                near_road=prox.get("near_road", False),
+                near_settlement=prox.get("near_settlement", False),
             )
             alert_info = score_to_alert(score)
 

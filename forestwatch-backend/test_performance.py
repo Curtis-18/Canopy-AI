@@ -1,5 +1,5 @@
 """
-Performance Testing Script for ForestWatch Backend
+Performance Testing Script for Canopy AI Backend
 Tests cache hits and measures response times
 """
 
@@ -110,7 +110,7 @@ def test_tiles(lat, lng, year_a, year_b, radius_km, label=""):
 def main():
     """Run performance tests"""
     print("\n" + "="*60)
-    print("ForestWatch Backend Performance Tests")
+    print("Canopy AI Backend Performance Tests")
     print("="*60)
     
     # Test data - Uganda forest locations

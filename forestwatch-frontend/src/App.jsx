@@ -6,7 +6,9 @@ import AlertBadge           from './components/AlertBadge'
 import InsightPanel         from './components/InsightPanel'
 import TimeSeriesPanel      from './components/TimeSeriesPanel'
 import SatelliteComparePanel from './components/SatelliteComparePanel'
-import { analyzeForest, compareForest, getMapTiles, getBasemap, getInsight } from './api'
+import HotZonesPanel        from './components/HotZonesPanel'
+import { analyzeForest, compareForest, getMapTiles, getInsight, getPhoto } from './api'
+import { YEAR_OPTIONS, resolveYear } from './yearOptions'
 
 export default function App() {
   const [selectedPoint, setSelectedPoint] = useState(null)
@@ -26,7 +28,10 @@ export default function App() {
   const [showTimeSeries,   setShowTimeSeries]   = useState(false)
   const [showSatCompare,   setShowSatCompare]   = useState(false)
   const [flyToPoint,       setFlyToPoint]       = useState(null)
-  const [basemapUrl,       setBasemapUrl]       = useState(null)
+
+  // Hot Zones state
+  const [hotZoneSatData,   setHotZoneSatData]   = useState(null) // {zone, statsA, statsB, yearA, yearB, tiles}
+  const [hotZoneCircle,    setHotZoneCircle]    = useState(null) // {lat, lng}
 
   // Search state
   const [searchQuery,       setSearchQuery]       = useState('')
@@ -48,12 +53,6 @@ export default function App() {
     setFlyToPoint(null)
   }
 
-  // Fetch GEE basemap on startup
-  useEffect(() => {
-    getBasemap()
-      .then(data => { if (data?.url) setBasemapUrl(data.url) })
-      .catch(() => {}) // fail silently — dark CartoDB fallback used
-  }, [])
 
   // Search: update suggestions as user types
   useEffect(() => {
@@ -105,16 +104,33 @@ export default function App() {
       setAnalyzeResult(null)
       setCompareResult(null)
 
-      const tileYearA = activeTab === 'analyze' ? year - 1 : yearA
-      const tileYearB = activeTab === 'analyze' ? year     : yearB
+      // Resolve year options so we get the correct year int + date range
+      const ry  = resolveYear(year)
+      const ryA = yearA ? resolveYear(yearA) : null
+      const ryB = yearB ? resolveYear(yearB) : null
+
+      // Tiles use yearA/yearB integers; in analyze mode we use year-1 vs year (full years)
+      const tileYearA = activeTab === 'analyze' ? ry.year - 1 : ryA?.year
+      const tileYearB = activeTab === 'analyze' ? ry.year     : ryB?.year
+
+      // Tile date opts: analyze mode uses full years; compare mode mirrors selection
+      const tileOpts = activeTab === 'analyze' ? {} : {
+        date_start_a: ryA?.dateStart, date_end_a: ryA?.dateEnd, label_a: ryA?.label,
+        date_start_b: ryB?.dateStart, date_end_b: ryB?.dateEnd, label_b: ryB?.label,
+      }
 
       try {
         const [analysisResult] = await Promise.all([
           activeTab === 'analyze'
-            ? analyzeForest(lat, lng, year, radiusKm)
-            : compareForest(lat, lng, yearA, yearB, radiusKm),
+            ? analyzeForest(lat, lng, ry.year, radiusKm, {
+                date_start: ry.dateStart, date_end: ry.dateEnd, label: ry.label,
+              })
+            : compareForest(lat, lng, ryA.year, ryB.year, radiusKm, {
+                date_start_a: ryA.dateStart, date_end_a: ryA.dateEnd, label_a: ryA.label,
+                date_start_b: ryB.dateStart, date_end_b: ryB.dateEnd, label_b: ryB.label,
+              }),
 
-          getMapTiles(lat, lng, tileYearA, tileYearB, radiusKm)
+          getMapTiles(lat, lng, tileYearA, tileYearB, radiusKm, tileOpts)
             .then(t => setTiles(t))
             .catch(() => {})
             .finally(() => setTilesLoading(false)),
@@ -136,8 +152,10 @@ export default function App() {
     fetchData()
   }, [selectedPoint, activeTab, year, yearA, yearB, radiusKm])
 
-  // showSatCompare is controlled only by the button in ComparePanel and the panel's
-  // own close button — no automatic triggers.
+  // Open results panel when switching to hotzones tab
+  useEffect(() => {
+    if (activeTab === 'hotzones') setResultsOpen(true)
+  }, [activeTab])
 
 
   return (
@@ -170,7 +188,7 @@ export default function App() {
               WebkitTextFillColor: 'transparent',
               letterSpacing: '-0.5px'
             }}>
-              ForestWatch<span style={{ color: '#4ade80' }}>AI</span>
+              Canopy<span style={{ color: '#4ade80' }}>AI</span>
             </div>
             <div style={{
               fontFamily: "'Space Mono', monospace",
@@ -343,16 +361,16 @@ export default function App() {
 
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid rgba(34,197,94,0.08)', padding: '8px 0' }}>
-            {[['analyze', '🔍 Analyze'], ['compare', '📊 Compare']].map(([key, label]) => (
+            {[['analyze', '🔍 Analyze'], ['compare', '📊 Compare'], ['hotzones', '🔥 Hot Zones']].map(([key, label]) => (
               <button key={key} onClick={() => setActiveTab(key)} style={{
                 flex: 1,
-                padding: '12px 16px',
+                padding: '10px 8px',
                 border: 'none',
                 background: activeTab === key ? 'rgba(34,197,94,0.1)' : 'transparent',
                 borderBottom: activeTab === key ? '2px solid #4ade80' : '2px solid transparent',
                 color: activeTab === key ? '#4ade80' : '#4b5563',
                 fontFamily: "'Inter', sans-serif",
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: activeTab === key ? 600 : 500,
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
@@ -360,7 +378,8 @@ export default function App() {
             ))}
           </div>
 
-          {/* Controls */}
+          {/* Controls — hidden on hotzones tab (panel manages its own UI) */}
+          {activeTab !== 'hotzones' && (
           <div style={{ padding: '16px', borderBottom: '1px solid rgba(34,197,94,0.08)' }}>
             {activeTab === 'analyze' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -371,8 +390,8 @@ export default function App() {
                   letterSpacing: 1,
                   fontWeight: 600
                 }}>
-                  YEAR — <span style={{ color: '#22c55e', fontWeight: 700 }}>{year}</span>
-                  <select value={year} onChange={e => setYear(+e.target.value)} style={{
+                  YEAR — <span style={{ color: '#22c55e', fontWeight: 700 }}>{resolveYear(year).label}</span>
+                  <select value={String(year)} onChange={e => setYear(e.target.value)} style={{
                     display: 'block',
                     width: '100%',
                     marginTop: 6,
@@ -384,10 +403,9 @@ export default function App() {
                     fontSize: 13,
                     cursor: 'pointer',
                     fontWeight: 500,
-                    optionColor: '#000',
                   }}>
-                    {Array.from({length: 24}, (_, i) => 2003 + i).reverse().map(y =>
-                      <option key={y} value={y} style={{ color: '#000', background: '#fff' }}>{y}</option>
+                    {YEAR_OPTIONS.map(o =>
+                      <option key={o.value} value={String(o.value)} style={{ color: '#000', background: '#fff' }}>{o.label}</option>
                     )}
                   </select>
                 </label>
@@ -421,8 +439,8 @@ export default function App() {
                     letterSpacing: 1,
                     fontWeight: 600
                   }}>
-                    {lbl} — <span style={{ color: '#22c55e', fontWeight: 700 }}>{val}</span>
-                    <select value={val} onChange={e => setter(e.target.value === "" ? "" : +e.target.value)} style={{
+                    {lbl} — <span style={{ color: '#22c55e', fontWeight: 700 }}>{val ? resolveYear(val).label : ''}</span>
+                    <select value={String(val)} onChange={e => setter(e.target.value === '' ? '' : e.target.value)} style={{
                       display: 'block',
                       width: '100%',
                       marginTop: 6,
@@ -436,8 +454,8 @@ export default function App() {
                       fontWeight: 500,
                     }}>
                       <option value="" disabled>Select year</option>
-                      {Array.from({length: 24}, (_, i) => 2003 + i).reverse().map(y =>
-                        <option key={y} value={y} style={{ color: '#000', background: '#fff' }}>{y}</option>
+                      {YEAR_OPTIONS.map(o =>
+                        <option key={o.value} value={String(o.value)} style={{ color: '#000', background: '#fff' }}>{o.label}</option>
                       )}
                     </select>
                   </label>
@@ -484,6 +502,31 @@ export default function App() {
               </div>
             )}
           </div>
+          )}
+
+          {/* Hot Zones — left sidebar shows a brief prompt; the panel itself lives in the results drawer */}
+          {activeTab === 'hotzones' && (
+            <div style={{
+              flex: 1,
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              gap: 14, padding: 24, textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 32 }}>🔥</div>
+              <div style={{
+                fontFamily: "'Space Mono', monospace", fontSize: 10,
+                color: '#4b5563', letterSpacing: 1, lineHeight: 2,
+              }}>
+                HOT ZONES PANEL IS OPEN<br />ON THE RIGHT →
+              </div>
+              <div style={{
+                fontFamily: "'Inter', sans-serif", fontSize: 11,
+                color: '#374151', lineHeight: 1.6, maxWidth: 200,
+              }}>
+                Select a forest and years, then scan with AI Vision to find genuine canopy loss zones.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Secondary Drawer: Results Panel (Spawns to the right of the Control Drawer) */}
@@ -497,7 +540,7 @@ export default function App() {
           borderRight: '1px solid rgba(34,197,94,0.2)',
           display: 'flex',
           flexDirection: 'column',
-          transform: resultsOpen && (selectedPoint || loading) ? 'translateX(0)' : 'translateX(-100%)',
+          transform: resultsOpen && (selectedPoint || loading || activeTab === 'hotzones') ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
           zIndex: 998, // Just behind main drawer
           backdropFilter: 'blur(10px)',
@@ -521,7 +564,7 @@ export default function App() {
               alignItems: 'center',
               gap: 8
             }}>
-              {loading ? '⏳ PROCESSING' : '📋 ANALYSIS RESULTS'}
+              {loading ? '⏳ PROCESSING' : activeTab === 'hotzones' ? '🔥 HOT ZONES' : '📋 ANALYSIS RESULTS'}
             </div>
             <button onClick={() => setResultsOpen(false)} style={{
               background: 'transparent',
@@ -543,7 +586,7 @@ export default function App() {
           </div>
 
           {/* Results Body */}
-          <div style={{ padding: '20px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ padding: activeTab === 'hotzones' ? 0 : '20px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: activeTab === 'hotzones' ? 0 : 16 }}>
             {error && (
               <div style={{
                 padding: '12px 14px',
@@ -558,7 +601,7 @@ export default function App() {
               </div>
             )}
 
-            {!selectedPoint && !loading && !error && (
+            {!selectedPoint && !loading && !error && activeTab !== 'hotzones' && (
                <div style={{ textAlign: 'center', marginTop: 40, color: '#4b5563', fontFamily: "'Space Mono', monospace", fontSize: 11 }}>
                  WAITING FOR MAP INPUT...
                </div>
@@ -584,7 +627,7 @@ export default function App() {
             {analyzeResult && !loading && (
               <div style={{ animation: 'fadeUp 0.4s ease' }}>
                 <AlertBadge
-                  level={alertLevel}
+                  level={analyzeResult?.alert?.level}
                   score={analyzeResult.alert.score}
                   message={analyzeResult.alert.message}
                   large
@@ -596,7 +639,7 @@ export default function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <StatsPanel
                   stats={analyzeResult?.stats}
-                  ndvi={analyzeResult?.ndvi_mean}
+                  ndvi={analyzeResult?.stats?.ndvi_mean}
                   year={year}
                   loading={loading}
                 />
@@ -627,36 +670,47 @@ export default function App() {
               />
             )}
 
+            {/* Hot Zones panel lives here in the results drawer */}
+            {activeTab === 'hotzones' && (
+              <HotZonesPanel
+                onFlyTo={(lat, lng) => setFlyToPoint([lat, lng, 16])}
+                onShowSatCompare={(satData, tiles) => {
+                  if (!satData) { setHotZoneSatData(null); return }
+                  setHotZoneSatData({ ...satData, tiles })
+                }}
+                onSetCircle={(c) => setHotZoneCircle(c)}
+              />
+            )}
+
           </div>
         </div>
 
         {/* Map */}
         <div style={{ flex: 1, position: 'relative' }}>
           <Map
-            selectedPoint={selectedPoint}
+            selectedPoint={activeTab !== 'hotzones' ? selectedPoint : hotZoneCircle ? [hotZoneCircle.lat, hotZoneCircle.lng] : null}
             alertLevel={analyzeResult?.alert?.level || compareResult?.alert?.level}
             onMapClick={handleMapClick}
-            radiusKm={radiusKm}
+            radiusKm={activeTab === 'hotzones' ? 2 : radiusKm}
             tiles={tiles}
             tilesLoading={tilesLoading}
             flyToPoint={flyToPoint}
-            basemapUrl={basemapUrl}
           />
           
           {showTimeSeries && selectedPoint && activeTab === 'compare' && yearA !== "" && yearB !== "" && (
             <TimeSeriesPanel
               lat={selectedPoint[0]}
               lng={selectedPoint[1]}
-              startYear={yearA}
-              endYear={yearB}
+              startYear={resolveYear(yearA).year}
+              endYear={resolveYear(yearB).year}
               radiusKm={radiusKm}
               onClose={() => setShowTimeSeries(false)}
             />
           )}
           {showSatCompare && selectedPoint && tiles && compareResult && activeTab === 'compare' && (
             <SatelliteComparePanel
-              yearA={yearA}
-              yearB={yearB}
+              yearA={yearA ? resolveYear(yearA).label : String(yearA)}
+              yearB={yearB ? resolveYear(yearB).label : String(yearB)}
               statsA={compareResult.stats_a}
               statsB={compareResult.stats_b}
               tiles={tiles}
@@ -664,6 +718,20 @@ export default function App() {
               radiusKm={radiusKm}
               onClose={() => setShowSatCompare(false)}
               onNavigate={(lat, lng) => setFlyToPoint([lat, lng])}
+            />
+          )}
+          {/* Hot Zones satellite comparison panel */}
+          {hotZoneSatData && activeTab === 'hotzones' && (
+            <SatelliteComparePanel
+              yearA={hotZoneSatData.yearA}
+              yearB={hotZoneSatData.yearB}
+              statsA={hotZoneSatData.statsA}
+              statsB={hotZoneSatData.statsB}
+              tiles={hotZoneSatData.tiles}
+              selectedPoint={[hotZoneSatData.zone.lat, hotZoneSatData.zone.lng]}
+              radiusKm={2}
+              onClose={() => setHotZoneSatData(null)}
+              onNavigate={(lat, lng) => setFlyToPoint([lat, lng, 16])}
             />
           )}
         </div>

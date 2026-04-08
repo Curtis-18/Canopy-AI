@@ -25,6 +25,8 @@ export default function ComparePanel({ data, loading, onShowSat }) {
 
   const lost   = data.forest_lost_pct
   const lostHa = data.forest_lost_ha
+  const labelA = data.label_a || String(data.year_a)
+  const labelB = data.label_b || String(data.year_b)
 
   // Build insight request data for on-demand AI
   const insightData = data.alert ? {
@@ -75,8 +77,8 @@ export default function ComparePanel({ data, loading, onShowSat }) {
         </div>
         <div style={{ fontSize: 13, color: '#cbd5e1', lineHeight: 1.5, fontWeight: 500 }}>
           {lostHa > 0
-            ? `📉 ${lostHa} hectares of forest lost between ${data.year_a} and ${data.year_b}`
-            : `✅ Forest cover stable between ${data.year_a} and ${data.year_b}`
+            ? `📉 ${lostHa} hectares of forest lost between ${labelA} and ${labelB}`
+            : `✅ Forest cover stable between ${labelA} and ${labelB}`
           }
         </div>
       </div>
@@ -92,8 +94,8 @@ export default function ComparePanel({ data, loading, onShowSat }) {
       {/* Side by side year comparison */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {[
-          { year: data.year_a, stats: data.stats_a, label: 'BASELINE YEAR', emoji: '📍' },
-          { year: data.year_b, stats: data.stats_b, label: 'COMPARE YEAR',  emoji: '📊' },
+          { year: labelA, stats: data.stats_a, label: 'BASELINE YEAR', emoji: '📍' },
+          { year: labelB, stats: data.stats_b, label: 'COMPARE YEAR',  emoji: '📊' },
         ].map(({ year, stats, label, emoji }) => (
           <div key={year} style={{
             padding: '14px 16px',

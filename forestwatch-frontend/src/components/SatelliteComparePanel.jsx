@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MapContainer, TileLayer, Rectangle, useMapEvents } from 'react-leaflet'
+import { Rectangle, useMapEvents } from 'react-leaflet'
+import { getPhoto } from '../api'
 
-// ─── Slippy-map helpers ───────────────────────────────────────────────────────
+// ─── Slippy-map helpers (kept for hotspot detection which uses change tile) ─────
 
 function latLngToTile(lat, lng, zoom) {
   const n   = Math.pow(2, zoom)
@@ -67,33 +68,31 @@ async function detectHotspot(changeTileUrl, lat, lng, radiusKm) {
   return { coords: [lat, lng], detected: false }
 }
 
-// ─── Click-to-navigate handler (inside a MapContainer) ────────────────────────
-
-function ClickNavigator({ onNavigate }) {
-  useMapEvents({
-    click(e) { onNavigate(e.latlng.lat, e.latlng.lng) },
-  })
-  return null
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function SatelliteComparePanel({
   yearA, yearB, statsA, statsB,
-  tiles,           // { natural_a, natural_b, change, ... }
+  tiles,           // { change, ndvi, risk, year_a, year_b, ... }
   selectedPoint,
   radiusKm,
   onClose,
   onNavigate,      // (lat, lng) => void — fly main map to that point
 }) {
-  const [hotspot, setHotspot] = useState(null)
-  const [ready,   setReady]   = useState(false)
-  const [status,  setStatus]  = useState('Locating critical loss zone…')
+  const [hotspot,  setHotspot]  = useState(null)
+  const [ready,    setReady]    = useState(false)
+  const [status,   setStatus]   = useState('Locating critical loss zone…')
+  const [photoA,   setPhotoA]   = useState(null)
+  const [photoB,   setPhotoB]   = useState(null)
+  const [photoErr, setPhotoErr] = useState(null)
 
+  // Step 1: detect hotspot from change tile
   useEffect(() => {
     if (!selectedPoint) return
     setReady(false)
     setHotspot(null)
+    setPhotoA(null)
+    setPhotoB(null)
+    setPhotoErr(null)
     setStatus('Locating critical loss zone…')
 
     const [lat, lng] = selectedPoint
@@ -106,6 +105,29 @@ export default function SatelliteComparePanel({
     init()
   }, [tiles?.change, selectedPoint?.[0], selectedPoint?.[1], radiusKm])
 
+  // Step 2: fetch Sentinel Hub photos once hotspot is ready
+  useEffect(() => {
+    if (!ready || !selectedPoint) return
+
+    const yearAInt = parseInt(String(yearA), 10) || new Date().getFullYear()
+    const yearBInt = parseInt(String(yearB), 10) || new Date().getFullYear()
+    const [lat, lng] = selectedPoint
+
+    setStatus(`Fetching ${yearAInt} & ${yearBInt} satellite images…`)
+
+    getPhoto(lat, lng, yearAInt, yearBInt)
+      .then(data => {
+        setPhotoA(data.photo_a)
+        setPhotoB(data.photo_b)
+        setStatus('')
+      })
+      .catch(err => {
+        console.error('Photo fetch failed:', err)
+        setPhotoErr('Could not load satellite images — backend unreachable')
+        setStatus('')
+      })
+  }, [ready, selectedPoint?.[0], selectedPoint?.[1], yearA, yearB])
+
   if (!selectedPoint) return null
 
   const hotCoords = hotspot?.coords ?? selectedPoint
@@ -115,9 +137,9 @@ export default function SatelliteComparePanel({
     [hotCoords[0] + BOX, hotCoords[1] + BOX],
   ]
 
-  const naturalA = tiles?.natural_a || ''
-  const naturalB = tiles?.natural_b || ''
-  const hasNaturalTiles = naturalA && naturalB
+  const yearAInt = parseInt(String(yearA), 10)
+  const yearBInt = parseInt(String(yearB), 10)
+  const photosLoading = ready && !photoA && !photoB && !photoErr
 
   return (
     <div style={{
@@ -149,7 +171,7 @@ export default function SatelliteComparePanel({
               fontFamily: "'Space Mono', monospace", fontSize: 8, color: '#4b5563',
               letterSpacing: 1.2, marginTop: 2, whiteSpace: 'nowrap',
             }}>
-              SENTINEL-2 NATURAL COLOUR · B4·B3·B2 · ZOOM 16 · CLICK PANEL TO NAVIGATE
+              GEE · SENTINEL-2 · NATURAL COLOUR · CLICK PANEL TO NAVIGATE
             </div>
           </div>
         </div>
@@ -179,25 +201,16 @@ export default function SatelliteComparePanel({
             letterSpacing: 1.2, color: '#22c55e', fontWeight: 600,
           }}>{status}</div>
         </div>
-      ) : !hasNaturalTiles ? (
-        /* Natural tiles not yet returned by backend (old cache or error) */
-        <div style={{
-          padding: 48, textAlign: 'center', color: '#6b7280',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-        }}>
-          <span style={{ fontSize: 28 }}>⚠️</span>
-          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: 1, lineHeight: 1.8 }}>
-            NATURAL COLOUR TILES NOT AVAILABLE<br />
-            Run a new compare analysis to generate Sentinel-2 imagery
-          </div>
-        </div>
       ) : (
         <div style={{ display: 'flex' }}>
-          <SideMap
-            year={yearA} label="BASELINE YEAR"
-            tileUrl={naturalA}
-            center={hotCoords} boxBounds={boxBounds}
-            stats={statsA} side="left"
+          <SidePanel
+            year={yearAInt} label="BASELINE YEAR"
+            photoData={photoA}
+            loading={photosLoading}
+            side="left"
+            stats={statsA}
+            hotCoords={hotCoords}
+            boxBounds={boxBounds}
             onNavigate={onNavigate}
           />
           {/* Green divider */}
@@ -206,11 +219,14 @@ export default function SatelliteComparePanel({
             background: 'linear-gradient(180deg, transparent 0%, #22c55e 15%, #22c55e 85%, transparent 100%)',
             boxShadow: '0 0 14px rgba(34,197,94,0.45)',
           }} />
-          <SideMap
-            year={yearB} label="COMPARE YEAR"
-            tileUrl={naturalB}
-            center={hotCoords} boxBounds={boxBounds}
-            stats={statsB} side="right"
+          <SidePanel
+            year={yearBInt} label="COMPARE YEAR"
+            photoData={photoB}
+            loading={photosLoading}
+            side="right"
+            stats={statsB}
+            hotCoords={hotCoords}
+            boxBounds={boxBounds}
             onNavigate={onNavigate}
           />
         </div>
@@ -219,21 +235,58 @@ export default function SatelliteComparePanel({
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <div style={{
         padding: '8px 18px', borderTop: '1px solid rgba(34,197,94,0.08)',
-        display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)',
+        display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(0,0,0,0.25)',
       }}>
-        <div style={{
-          width: 6, height: 6, borderRadius: '50%',
-          background: '#f97316', boxShadow: '0 0 6px rgba(249,115,22,0.8)', flexShrink: 0,
-        }} />
-        <span style={{
-          fontFamily: "'Space Mono', monospace", fontSize: 9, color: '#6b7280', letterSpacing: 0.8,
-        }}>
-          {hotspot?.detected
-            ? `HOTSPOT DETECTED · ${hotCoords[0].toFixed(5)}°N ${hotCoords[1].toFixed(5)}°E`
-            : `CENTRE · ${hotCoords[0].toFixed(5)}°N ${hotCoords[1].toFixed(5)}°E`
-          }
-          {' '}· ORANGE BOX = AREA OF INTEREST · CLICK PANEL TO NAVIGATE MAP
-        </span>
+        {/* Cross-sensor warning */}
+        {tiles?.cross_sensor_warning && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '5px 10px',
+            background: 'rgba(245,158,11,0.1)',
+            border: '1px solid rgba(245,158,11,0.3)',
+            borderRadius: 6,
+          }}>
+            <span style={{ fontSize: 11, flexShrink: 0 }}>⚠️</span>
+            <span style={{
+              fontFamily: "'Space Mono', monospace", fontSize: 8,
+              color: '#f59e0b', letterSpacing: 0.5, lineHeight: 1.4,
+            }}>
+              {tiles.cross_sensor_warning}
+            </span>
+          </div>
+        )}
+        {photoErr && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '5px 10px',
+            background: 'rgba(239,68,68,0.1)',
+            border: '1px solid rgba(239,68,68,0.3)',
+            borderRadius: 6,
+          }}>
+            <span style={{ fontSize: 11, flexShrink: 0 }}>⚠️</span>
+            <span style={{
+              fontFamily: "'Space Mono', monospace", fontSize: 8,
+              color: '#ef4444', letterSpacing: 0.5, lineHeight: 1.4,
+            }}>
+              {photoErr}
+            </span>
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: '#f97316', boxShadow: '0 0 6px rgba(249,115,22,0.8)', flexShrink: 0,
+          }} />
+          <span style={{
+            fontFamily: "'Space Mono', monospace", fontSize: 9, color: '#6b7280', letterSpacing: 0.8,
+          }}>
+            {hotspot?.detected
+              ? `HOTSPOT DETECTED · ${hotCoords[0].toFixed(5)}°N ${hotCoords[1].toFixed(5)}°E`
+              : `CENTRE · ${hotCoords[0].toFixed(5)}°N ${hotCoords[1].toFixed(5)}°E`
+            }
+            {' '}· ORANGE BOX = AREA OF INTEREST · CLICK PANEL TO NAVIGATE MAP
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -241,40 +294,74 @@ export default function SatelliteComparePanel({
 
 // ─── Single side panel ────────────────────────────────────────────────────────
 
-function SideMap({ year, label, tileUrl, center, boxBounds, stats, side, onNavigate }) {
-  const ZOOM   = 16
-  const mapKey = `${year}-${center[0].toFixed(6)}-${center[1].toFixed(6)}`
+function SidePanel({ year, label, photoData, loading, side, stats, hotCoords, boxBounds, onNavigate }) {
 
-  const handleNavigate = useCallback((lat, lng) => {
-    if (onNavigate) onNavigate(lat, lng)
-  }, [onNavigate])
+  const handleClick = useCallback(() => {
+    if (onNavigate) onNavigate(hotCoords[0], hotCoords[1])
+  }, [onNavigate, hotCoords])
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-      <div style={{ position: 'relative', height: 360, background: '#050d06', cursor: 'crosshair' }}>
-        <MapContainer
-          key={mapKey}
-          center={center} zoom={ZOOM}
-          style={{ height: '100%', width: '100%' }}
-          zoomControl={false} attributionControl={false}
-          dragging={false} scrollWheelZoom={false}
-          doubleClickZoom={false} touchZoom={false} keyboard={false}
-        >
-          <TileLayer url={tileUrl} maxZoom={20} opacity={1} />
-          {boxBounds && (
-            <Rectangle
-              bounds={boxBounds}
-              pathOptions={{ color: '#f97316', weight: 2.5, fill: false, dashArray: '5 3' }}
-            />
-          )}
-          {onNavigate && <ClickNavigator onNavigate={handleNavigate} />}
-        </MapContainer>
+      {/* Image area */}
+      <div
+        style={{ position: 'relative', height: 360, background: '#050d06', cursor: 'pointer', overflow: 'hidden' }}
+        onClick={handleClick}
+        title="Click to navigate map to this location"
+      >
+        {/* ── Image or placeholder ── */}
+        {loading ? (
+          /* Loading spinner */
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 14,
+          }}>
+            <span style={{ fontSize: 32, animation: 'pulse 1.5s ease-in-out infinite' }}>🛰️</span>
+            <div style={{
+              fontFamily: "'Space Mono', monospace", fontSize: 10,
+              color: '#22c55e', letterSpacing: 1.2, fontWeight: 600, textAlign: 'center',
+            }}>
+              Fetching {year} satellite image
+            </div>
+          </div>
+        ) : photoData?.image_base64 ? (
+          /* Sentinel Hub image */
+          <img
+            src={`data:image/png;base64,${photoData.image_base64}`}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            alt={`Satellite view ${photoData.year_used}`}
+          />
+        ) : (
+          /* Unavailable placeholder */
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 10, background: 'rgba(10,20,12,0.95)', padding: '0 24px', textAlign: 'center',
+          }}>
+            <span style={{ fontSize: 28, opacity: 0.5 }}>🌫️</span>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: '#4b5563', letterSpacing: 0.8, lineHeight: 1.8 }}>
+              Satellite image unavailable for {year}<br />
+              No cloud-free pass found within ±2 years
+            </div>
+          </div>
+        )}
+
+        {/* ── Orange bounding box overlay (SVG-free: use absolute + Leaflet workaround) ── */}
+        {/* We keep the orange box visual via an absolutely-positioned ring */}
+        <div style={{
+          position: 'absolute',
+          top: '35%', left: '35%', right: '35%', bottom: '35%',
+          border: '2px dashed #f97316',
+          borderRadius: 2,
+          pointerEvents: 'none',
+          boxShadow: '0 0 0 1px rgba(249,115,22,0.2)',
+        }} />
 
         {/* Year + label badge */}
         <div style={{
           position: 'absolute', top: 10,
           ...(side === 'left' ? { left: 10 } : { right: 10 }),
-          zIndex: 1000,
+          zIndex: 10,
           background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(8px)',
           border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8,
           padding: '5px 11px', display: 'flex', alignItems: 'center', gap: 6,
@@ -287,26 +374,26 @@ function SideMap({ year, label, tileUrl, center, boxBounds, stats, side, onNavig
           <span style={{
             fontFamily: "'Syne', sans-serif", fontSize: 16,
             fontWeight: 800, color: '#fff', letterSpacing: '-0.5px',
-          }}>{year}</span>
+          }}>{photoData?.year_used ?? year}</span>
         </div>
 
         {/* Imagery source badge */}
         <div style={{
           position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 1000, pointerEvents: 'none',
+          zIndex: 10, pointerEvents: 'none',
           background: 'rgba(34,197,94,0.85)', backdropFilter: 'blur(6px)',
           border: '1px solid rgba(34,197,94,0.5)', borderRadius: 5,
           padding: '3px 9px',
           fontFamily: "'Space Mono', monospace", fontSize: 8, fontWeight: 700,
           color: '#fff', letterSpacing: 0.8, whiteSpace: 'nowrap',
         }}>
-          📡 Sentinel-2 Natural Colour · {year}
+          📡 GEE · Sentinel-2 · {photoData?.year_used ?? year}
         </div>
 
         {/* Area of interest label */}
         <div style={{
           position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 1000, pointerEvents: 'none',
+          zIndex: 10, pointerEvents: 'none',
           background: 'rgba(249,115,22,0.88)', backdropFilter: 'blur(6px)',
           border: '1px solid rgba(249,115,22,0.5)', borderRadius: 5,
           padding: '3px 9px',
@@ -319,7 +406,7 @@ function SideMap({ year, label, tileUrl, center, boxBounds, stats, side, onNavig
         {/* Click-to-navigate hint */}
         <div style={{
           position: 'absolute', bottom: 32, right: 8,
-          zIndex: 1000, pointerEvents: 'none',
+          zIndex: 10, pointerEvents: 'none',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
           border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4,
           padding: '2px 7px',
@@ -330,11 +417,31 @@ function SideMap({ year, label, tileUrl, center, boxBounds, stats, side, onNavig
         </div>
       </div>
 
+      {/* Fallback year notice (amber pill below image) */}
+      {photoData?.is_fallback_year && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px',
+          background: 'rgba(245,158,11,0.12)',
+          border: '1px solid rgba(245,158,11,0.3)',
+          borderTop: 'none',
+        }}>
+          <span style={{ fontSize: 10 }}>⚠</span>
+          <span style={{
+            fontFamily: "'Space Mono', monospace", fontSize: 8,
+            color: '#f59e0b', letterSpacing: 0.5, lineHeight: 1.4,
+          }}>
+            Nearest clear image: {photoData.year_used} — no cloud-free pass found for {photoData.requested_year}
+          </span>
+        </div>
+      )}
+
       {/* Stats strip */}
       <div style={{
         display: 'flex', justifyContent: 'space-around', alignItems: 'center',
         padding: '13px 16px',
         borderTop: '1px solid rgba(34,197,94,0.1)', background: 'rgba(0,0,0,0.3)', gap: 6,
+        flex: 1,
       }}>
         <StatChip label="Healthy Forest" value={fmtPct(stats?.healthy_pct)} color="#22c55e" />
         <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.07)' }} />

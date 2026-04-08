@@ -113,6 +113,20 @@ export default function StatsPanel({ stats, ndvi, year, loading }) {
         <StatBar label="Degraded"       pct={stats.degraded_pct} color="#f97316" icon="📉" />
         <StatBar label="Cleared / Lost" pct={stats.cleared_pct} color="#ef4444" icon="❌" />
       </div>
+
+      {/* Analysis resolution note */}
+      {stats.analysis_scale_m && (
+        <div style={{
+          marginTop: 14,
+          fontFamily: "'Space Mono', monospace",
+          fontSize: 9,
+          color: '#4b5563',
+          letterSpacing: 0.5,
+          textAlign: 'right',
+        }}>
+          Analysis resolution: {stats.analysis_scale_m}m — clearings under 1ha may not be detected
+        </div>
+      )}
     </div>
   )
 }
