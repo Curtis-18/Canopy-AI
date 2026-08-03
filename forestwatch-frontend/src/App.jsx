@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Map                  from './components/Map'
 import StatsPanel           from './components/StatsPanel'
 import ComparePanel         from './components/ComparePanel'
@@ -7,7 +7,7 @@ import InsightPanel         from './components/InsightPanel'
 import TimeSeriesPanel      from './components/TimeSeriesPanel'
 import SatelliteComparePanel from './components/SatelliteComparePanel'
 import HotZonesPanel        from './components/HotZonesPanel'
-import { analyzeForest, compareForest, getMapTiles, getInsight, getPhoto } from './api'
+import { analyzeForest, compareForest, getMapTiles } from './api'
 import { YEAR_OPTIONS, resolveYear } from './yearOptions'
 
 export default function App() {
@@ -39,13 +39,13 @@ export default function App() {
   const [searchFocused,     setSearchFocused]     = useState(false)
   const searchRef = useRef(null)
 
-  const SEARCH_FORESTS = [
+  const SEARCH_FORESTS = useMemo(() => [
     { name: 'Mabira Forest',             lat:  0.45, lng: 32.95 },
     { name: 'Budongo Forest',            lat:  1.73, lng: 31.55 },
     { name: 'Kibale Forest',             lat:  0.50, lng: 30.36 },
     { name: 'Bwindi Forest',             lat: -1.03, lng: 29.68 },
     { name: 'Queen Elizabeth Nat. Park', lat: -0.20, lng: 29.90 },
-  ]
+  ], [])
 
   const handleMapClick = (lat, lng) => {
     setSelectedPoint([lat, lng])
@@ -61,7 +61,7 @@ export default function App() {
     setSearchSuggestions(
       SEARCH_FORESTS.filter(f => f.name.toLowerCase().includes(q))
     )
-  }, [searchQuery])
+  }, [searchQuery, SEARCH_FORESTS])
 
   const handleSearchSelect = (forest) => {
     setFlyToPoint([forest.lat, forest.lng, 12])
@@ -141,8 +141,9 @@ export default function App() {
 
         setResultsOpen(true) // Pop out results when data arrives
 
-      } catch {
-        setError('Could not reach backend. Is it running on port 8000?')
+      } catch (err) {
+        console.error('Backend request failed:', err)
+        setError(`Could not reach backend. Check the Render URL and deployment status. ${err?.message || ''}`.trim())
         setTilesLoading(false)
       } finally {
         setLoading(false)
