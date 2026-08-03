@@ -59,7 +59,7 @@ def init_gee():
     with _gee_lock:
         if _gee_initialized:
             return
-        key_path = os.getenv('GEE_KEY_PATH', '/etc/secrets/canopy-ai.json')
+        key_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', '/etc/secrets/canopy-ai.json')
         with open(key_path) as f:
             key_data = json.load(f)
         credentials = ee.ServiceAccountCredentials(key_data['client_email'], key_path)
