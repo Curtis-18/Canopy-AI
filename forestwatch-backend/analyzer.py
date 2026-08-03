@@ -57,12 +57,15 @@ def init_gee():
     if _gee_initialized:
         return
     with _gee_lock:
-        if _gee_initialized:          # double-check after acquiring lock
+        if _gee_initialized:
             return
-        ee.Initialize(project='deforestation-489507')
+        key_path = os.getenv('GEE_KEY_PATH', '/etc/secrets/canopy-ai.json')
+        with open(key_path) as f:
+            key_data = json.load(f)
+        credentials = ee.ServiceAccountCredentials(key_data['client_email'], key_path)
+        ee.Initialize(credentials, project='deforestation-489507')
         print("✓ Google Earth Engine connected")
         _gee_initialized = True
-
 
 def _init_gemini():
     """Initialize Gemini with a known model — no expensive list call."""
