@@ -1,42 +1,48 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import Map                  from './components/Map'
-import StatsPanel           from './components/StatsPanel'
-import ComparePanel         from './components/ComparePanel'
-import AlertBadge           from './components/AlertBadge'
-import InsightPanel         from './components/InsightPanel'
-import TimeSeriesPanel      from './components/TimeSeriesPanel'
-import SatelliteComparePanel from './components/SatelliteComparePanel'
-import HotZonesPanel        from './components/HotZonesPanel'
+
 import { analyzeForest, compareForest, getMapTiles } from './api'
+import { useAuth } from './context/useAuth'
 import { YEAR_OPTIONS, resolveYear } from './yearOptions'
 
+import AlertBadge from './components/AlertBadge'
+import ComparePanel from './components/ComparePanel'
+import HotZonesPanel from './components/HotZonesPanel'
+import InsightPanel from './components/InsightPanel'
+import Map from './components/Map'
+import SaveParcelButton from './components/SaveParcelButton'
+import SatelliteComparePanel from './components/SatelliteComparePanel'
+import StatsPanel from './components/StatsPanel'
+import TimeSeriesPanel from './components/TimeSeriesPanel'
+
 export default function App() {
+  const { user, signOut } = useAuth()
+
   const [selectedPoint, setSelectedPoint] = useState(null)
   const [analyzeResult, setAnalyzeResult] = useState(null)
   const [compareResult, setCompareResult] = useState(null)
-  const [tiles,         setTiles]         = useState(null)
-  const [tilesLoading,  setTilesLoading]  = useState(false)
-  const [loading,       setLoading]       = useState(false)
-  const [activeTab,     setActiveTab]     = useState('analyze')
-  const [year,          setYear]          = useState(2024)
-  const [yearA,         setYearA]         = useState("")
-  const [yearB,         setYearB]         = useState("")
-  const [radiusKm,      setRadiusKm]      = useState(5)
-  const [error,         setError]         = useState(null)
-  const [drawerOpen,    setDrawerOpen]    = useState(false)
-  const [resultsOpen,   setResultsOpen]   = useState(false)
-  const [showTimeSeries,   setShowTimeSeries]   = useState(false)
-  const [showSatCompare,   setShowSatCompare]   = useState(false)
-  const [flyToPoint,       setFlyToPoint]       = useState(null)
+  const [tiles, setTiles] = useState(null)
+  const [tilesLoading, setTilesLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('analyze')
+  const [year, setYear] = useState(2024)
+  const [yearA, setYearA] = useState('')
+  const [yearB, setYearB] = useState('')
+  const [radiusKm, setRadiusKm] = useState(5)
+  const [error, setError] = useState(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [resultsOpen, setResultsOpen] = useState(false)
+  const [showTimeSeries, setShowTimeSeries] = useState(false)
+  const [showSatCompare, setShowSatCompare] = useState(false)
+  const [flyToPoint, setFlyToPoint] = useState(null)
 
   // Hot Zones state
-  const [hotZoneSatData,   setHotZoneSatData]   = useState(null) // {zone, statsA, statsB, yearA, yearB, tiles}
-  const [hotZoneCircle,    setHotZoneCircle]    = useState(null) // {lat, lng}
+  const [hotZoneSatData, setHotZoneSatData] = useState(null) // {zone, statsA, statsB, yearA, yearB, tiles}
+  const [hotZoneCircle, setHotZoneCircle] = useState(null) // {lat, lng}
 
   // Search state
-  const [searchQuery,       setSearchQuery]       = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [searchSuggestions, setSearchSuggestions] = useState([])
-  const [searchFocused,     setSearchFocused]     = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
   const searchRef = useRef(null)
 
   const SEARCH_FORESTS = useMemo(() => [
@@ -158,6 +164,23 @@ export default function App() {
     if (activeTab === 'hotzones') setResultsOpen(true)
   }, [activeTab])
 
+  const handleHotZoneFlyTo = (lat, lng) => {
+    setFlyToPoint([lat, lng, 16])
+    setHotZoneCircle({ lat, lng })
+    setSelectedPoint([lat, lng])
+  }
+
+  const handleHotZoneCompare = (zoneData, tiles) => {
+    if (!zoneData) {
+      setHotZoneSatData(null)
+      return
+    }
+
+    setHotZoneSatData({
+      ...zoneData,
+      tiles,
+    })
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -203,31 +226,55 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '6px 14px',
-          background: 'linear-gradient(135deg, rgba(239,68,68,0.15) 0%, rgba(249,115,22,0.1) 100%)',
-          border: '1px solid rgba(239,68,68,0.3)',
-          borderRadius: 20,
-          backdropFilter: 'blur(8px)',
-        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: '#ef4444',
-            animation: 'pulse 1.5s infinite',
-            boxShadow: '0 0 8px rgba(239,68,68,0.6)'
-          }} />
-          <span style={{
-            fontFamily: "'Space Mono', monospace",
-            fontSize: 9,
-            color: '#ef4444',
-            letterSpacing: 1,
-            fontWeight: 600
-          }}>LIVE</span>
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 14px',
+            background: 'linear-gradient(135deg, rgba(239,68,68,0.15) 0%, rgba(249,115,22,0.1) 100%)',
+            border: '1px solid rgba(239,68,68,0.3)',
+            borderRadius: 20,
+            backdropFilter: 'blur(8px)',
+          }}>
+            <div style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: '#ef4444',
+              animation: 'pulse 1.5s infinite',
+              boxShadow: '0 0 8px rgba(239,68,68,0.6)'
+            }} />
+            <span style={{
+              fontFamily: "'Space Mono', monospace",
+              fontSize: 9,
+              color: '#ef4444',
+              letterSpacing: 1,
+              fontWeight: 600
+            }}>LIVE</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{
+              fontFamily: "'Space Mono', monospace",
+              fontSize: 9,
+              color: '#6b7280',
+              letterSpacing: 0.5,
+            }}>{user?.email}</span>
+            <button onClick={signOut} style={{
+              padding: '6px 14px',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 20,
+              color: '#9ca3af',
+              fontFamily: "'Inter', sans-serif",
+              fontSize: 11,
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}>
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -505,28 +552,13 @@ export default function App() {
           </div>
           )}
 
-          {/* Hot Zones — left sidebar shows a brief prompt; the panel itself lives in the results drawer */}
+          {/* Hot Zones */}
           {activeTab === 'hotzones' && (
-            <div style={{
-              flex: 1,
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              gap: 14, padding: 24, textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 32 }}>🔥</div>
-              <div style={{
-                fontFamily: "'Space Mono', monospace", fontSize: 10,
-                color: '#4b5563', letterSpacing: 1, lineHeight: 2,
-              }}>
-                HOT ZONES PANEL IS OPEN<br />ON THE RIGHT →
-              </div>
-              <div style={{
-                fontFamily: "'Inter', sans-serif", fontSize: 11,
-                color: '#374151', lineHeight: 1.6, maxWidth: 200,
-              }}>
-                Select a forest and years, then scan with AI Vision to find genuine canopy loss zones.
-              </div>
-            </div>
+            <HotZonesPanel
+              onFlyTo={handleHotZoneFlyTo}
+              onShowSatCompare={handleHotZoneCompare}
+              onSetCircle={setHotZoneCircle}
+            />
           )}
         </div>
 
@@ -637,51 +669,65 @@ export default function App() {
             )}
 
             {activeTab === 'analyze' && analyzeResult && !loading && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <StatsPanel
-                  stats={analyzeResult?.stats}
-                  ndvi={analyzeResult?.stats?.ndvi_mean}
-                  year={year}
-                  loading={loading}
-                />
-                <InsightPanel
-                  analysisData={analyzeResult ? {
-                    lat: analyzeResult.location.lat,
-                    lng: analyzeResult.location.lng,
-                    year: analyzeResult.year,
-                    location_name: analyzeResult.location.name || 'Unknown Forest',
-                    healthy_pct: analyzeResult.stats.healthy_pct,
-                    at_risk_pct: analyzeResult.stats.at_risk_pct,
-                    degraded_pct: analyzeResult.stats.degraded_pct,
-                    cleared_pct: analyzeResult.stats.cleared_pct,
-                    total_area_ha: analyzeResult.stats.total_area_ha,
-                    ndvi_mean: analyzeResult.stats.ndvi_mean,
-                    alert_level: analyzeResult.alert.level,
-                    risk_score: analyzeResult.alert.score,
-                  } : null}
-                />
-              </div>
-            )}
-            
-            {activeTab === 'compare' && compareResult && !loading && (
-              <ComparePanel
-                data={compareResult}
-                loading={loading}
-                onShowSat={() => setShowSatCompare(true)}
-              />
-            )}
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <StatsPanel
+      stats={analyzeResult?.stats}
+      ndvi={analyzeResult?.stats?.ndvi_mean}
+      year={year}
+      loading={loading}
+    />
+    <InsightPanel
+      analysisData={analyzeResult ? {
+        lat: analyzeResult.location.lat,
+        lng: analyzeResult.location.lng,
+        year: analyzeResult.year,
+        location_name: analyzeResult.location.name || 'Unknown Forest',
+        healthy_pct: analyzeResult.stats.healthy_pct,
+        at_risk_pct: analyzeResult.stats.at_risk_pct,
+        degraded_pct: analyzeResult.stats.degraded_pct,
+        cleared_pct: analyzeResult.stats.cleared_pct,
+        total_area_ha: analyzeResult.stats.total_area_ha,
+        ndvi_mean: analyzeResult.stats.ndvi_mean,
+        alert_level: analyzeResult.alert.level,
+        risk_score: analyzeResult.alert.score,
+      } : null}
+    />
+    <SaveParcelButton
+      mode="analyze"
+      lat={selectedPoint[0]}
+      lng={selectedPoint[1]}
+      radiusKm={radiusKm}
+      year={analyzeResult.year}
+      stats={analyzeResult.stats}
+      alertLevel={analyzeResult.alert.level}
+      riskScore={analyzeResult.alert.score}
+      raw={analyzeResult}
+    />
+  </div>
+)}
 
-            {/* Hot Zones panel lives here in the results drawer */}
-            {activeTab === 'hotzones' && (
-              <HotZonesPanel
-                onFlyTo={(lat, lng) => setFlyToPoint([lat, lng, 16])}
-                onShowSatCompare={(satData, tiles) => {
-                  if (!satData) { setHotZoneSatData(null); return }
-                  setHotZoneSatData({ ...satData, tiles })
-                }}
-                onSetCircle={(c) => setHotZoneCircle(c)}
-              />
-            )}
+{activeTab === 'compare' && compareResult && !loading && (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <ComparePanel
+      data={compareResult}
+      loading={loading}
+      onShowSat={() => setShowSatCompare(true)}
+    />
+    <SaveParcelButton
+      mode="compare"
+      lat={selectedPoint[0]}
+      lng={selectedPoint[1]}
+      radiusKm={radiusKm}
+      yearA={resolveYear(yearA).year}
+      yearB={resolveYear(yearB).year}
+      statsA={compareResult.stats_a}
+      statsB={compareResult.stats_b}
+      alertLevel={compareResult.alert.level}
+      riskScore={compareResult.alert.score}
+      raw={compareResult}
+    />
+  </div>
+)}
 
           </div>
         </div>
