@@ -3,7 +3,7 @@ import StatBar   from './StatBar'
 import InsightPanel from './InsightPanel'
 import ParcelHotZonesPanel from './ParcelHotZonesPanel'
 
-export default function ComparePanel({ data, loading, onShowSat, resolvedYearA, resolvedYearB, onFlyToZone, onShowZoneSatCompare, onSetZoneCircle }) {
+export default function ComparePanel({ data, loading, onShowSat, resolvedYearA, resolvedYearB,radiusKm, onFlyToZone, onShowZoneSatCompare, onSetZoneCircle }) {
   if (loading) return (
     <div style={{ padding: 24, textAlign: 'center', animation: 'fadeUp 0.3s ease' }}>
       <div style={{
@@ -213,14 +213,15 @@ export default function ComparePanel({ data, loading, onShowSat, resolvedYearA, 
       <InsightPanel analysisData={insightData} />
       {data.location && resolvedYearA && resolvedYearB && (
         <ParcelHotZonesPanel
-          lat={data.location.lat}
-          lng={data.location.lng}
-          yearA={resolvedYearA}
-          yearB={resolvedYearB}
-          onFlyTo={onFlyToZone}
-          onShowSatCompare={onShowZoneSatCompare}
-          onSetCircle={onSetZoneCircle}
-        />
+  lat={data.location.lat}
+  lng={data.location.lng}
+  radiusKm={radiusKm}
+  yearA={resolvedYearA}
+  yearB={resolvedYearB}
+  onFlyTo={onFlyToZone}
+  onShowSatCompare={onShowZoneSatCompare}
+  onSetCircle={onSetZoneCircle}
+/>
       )}
     </div>
   )

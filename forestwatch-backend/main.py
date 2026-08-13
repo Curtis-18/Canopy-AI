@@ -38,7 +38,6 @@ from analyzer import (
 # ============================================================================
 # APP
 # ============================================================================
-
 app = FastAPI(
     title="Canopy AI",
     description="AI-powered deforestation detection for Uganda",
@@ -365,8 +364,7 @@ def _write_hotzones_cache(key: str, payload: dict):
 # ============================================================================
 # HOT ZONES ENDPOINT
 # ============================================================================
-
-@app.post("/hotzones", response_model=HotZonesResponse)
+app.post("/hotzones", response_model=HotZonesResponse)
 async def scan_hot_zones(req: HotZonesRequest):
     """Scan a 5×5 grid — either a known forest, or a custom parcel by lat/lng —
     and return the top genuine forest loss zones.
@@ -381,22 +379,37 @@ async def scan_hot_zones(req: HotZonesRequest):
     loop = asyncio.get_event_loop()
 
     # ── resolve scan mode: named forest, or custom parcel by lat/lng ──
+    MIN_PARCEL_SCAN_KM = 1.0  # below this, sample circles would overlap the whole area — no real sub-zones to find
+
     if req.forest_name:
         if req.forest_name not in FORESTS:
             raise HTTPException(
                 status_code=422,
                 detail=f"Unknown forest_name {req.forest_name!r}. Valid: {sorted(FORESTS.keys())}",
             )
-        scope_key    = req.forest_name.replace(" ", "_").replace("/", "-")
-        display_name = req.forest_name
+        scope_key      = req.forest_name.replace(" ", "_").replace("/", "-")
+        display_name   = req.forest_name
+        grid_span_km   = None            # get_forest_grid uses its own fixed span
+        cell_radius_km = req.radius_km   # unchanged from the original behaviour
     else:
         if req.lat is None or req.lng is None:
             raise HTTPException(
                 status_code=422,
                 detail="Provide either forest_name, or both lat and lng for a custom parcel scan.",
             )
-        scope_key    = f"pt_{round(req.lat, 4)}_{round(req.lng, 4)}_{req.radius_km}"
-        display_name = req.parcel_name or f"Custom parcel ({req.lat:.4f}, {req.lng:.4f})"
+        if req.radius_km < MIN_PARCEL_SCAN_KM:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"radius_km must be at least {MIN_PARCEL_SCAN_KM}km for a hotspot scan. "
+                    "Below that a 5x5 grid has no room for distinct sub-zones — "
+                    "use the regular compare view for small parcels instead."
+                ),
+            )
+        scope_key      = f"pt_{round(req.lat, 4)}_{round(req.lng, 4)}_{req.radius_km}"
+        display_name   = req.parcel_name or f"Custom parcel ({req.lat:.4f}, {req.lng:.4f})"
+        grid_span_km   = req.radius_km
+        cell_radius_km = req.radius_km / 4   # keeps each sample circle narrower than the gap between points
 
     print(f"➔ /hotzones: scope={display_name!r} "
           f"year_a={req.year_a} year_b={req.year_b} "
@@ -435,7 +448,7 @@ async def scan_hot_zones(req: HotZonesRequest):
         if req.forest_name:
             grid = get_forest_grid(req.forest_name, n=5)  # 25 points
         else:
-            grid = get_grid_around_point(req.lat, req.lng, req.radius_km, n=5)
+            grid = get_grid_around_point(req.lat, req.lng, grid_span_km, n=5)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -448,18 +461,18 @@ async def scan_hot_zones(req: HotZonesRequest):
 
     def _safe_worldcover(lat, lng):
         try:
-            return check_worldcover_class(lat, lng, req.radius_km)
+            return check_worldcover_class(lat, lng, cell_radius_km)
         except Exception as exc:
             print(f"⚠️  WorldCover ({lat:.4f},{lng:.4f}) failed: {exc}")
             return {"dominant_class": 0, "class_name": "Unknown", "is_forest_candidate": True}
 
     try:
         tasks_a  = [loop.run_in_executor(_executor, _safe_analyze, lat, lng,
-                                         req.year_a, req.radius_km,
+                                         req.year_a, cell_radius_km,
                                          req.date_start_a, req.date_end_a)
                     for lat, lng in grid]
         tasks_b  = [loop.run_in_executor(_executor, _safe_analyze, lat, lng,
-                                         req.year_b, req.radius_km,
+                                         req.year_b, cell_radius_km,
                                          req.date_start_b, req.date_end_b)
                     for lat, lng in grid]
         tasks_wc = [loop.run_in_executor(_executor, _safe_worldcover, lat, lng)
@@ -551,7 +564,7 @@ async def scan_hot_zones(req: HotZonesRequest):
     def _safe_tile_urls(lat, lng):
         try:
             return get_natural_tile_urls(
-                lat, lng, req.year_a, req.year_b, req.radius_km,
+                lat, lng, req.year_a, req.year_b, cell_radius_km,
                 date_start_a=req.date_start_a, date_end_a=req.date_end_a,
                 date_start_b=req.date_start_b, date_end_b=req.date_end_b,
             )

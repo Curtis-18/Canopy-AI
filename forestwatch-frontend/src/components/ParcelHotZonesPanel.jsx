@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { scanParcelHotZones, getMapTiles } from '../api'
 import { ZoneCard, ScanningLoader } from './HotZonesPanel'
 
-export default function ParcelHotZonesPanel({ lat, lng, yearA, yearB, onFlyTo, onShowSatCompare, onSetCircle }) {
+export default function ParcelHotZonesPanel({ lat, lng, radiusKm, yearA, yearB, onFlyTo, onShowSatCompare, onSetCircle }) {
   const [scanning, setScanning]   = useState(false)
   const [zones, setZones]         = useState(null)
   const [error, setError]         = useState(null)
@@ -17,7 +17,7 @@ export default function ParcelHotZonesPanel({ lat, lng, yearA, yearB, onFlyTo, o
     setSelected(null)
     setScanMeta(null)
     try {
-      const result = await scanParcelHotZones(lat, lng, yearA.year, yearB.year, 2, {
+      const result = await scanParcelHotZones(lat, lng, yearA.year, yearB.year, radiusKm, {
         date_start_a: yearA.dateStart, date_end_a: yearA.dateEnd, label_a: yearA.label,
         date_start_b: yearB.dateStart, date_end_b: yearB.dateEnd, label_b: yearB.label,
         force_refresh: forceRefresh,
@@ -82,7 +82,17 @@ export default function ParcelHotZonesPanel({ lat, lng, yearA, yearB, onFlyTo, o
         <div style={{ flex: 1, height: 1, background: 'rgba(34,197,94,0.1)' }} />
       </div>
 
-      {!zones && !scanning && (
+      {radiusKm < 1 && !zones && !scanning && (
+        <div style={{
+          padding: '12px 14px', background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
+          fontSize: 11, color: '#6b7280', lineHeight: 1.6,
+        }}>
+          Hotspot scanning needs at least a 1km radius to find distinct sub-zones. Increase the radius above to enable this.
+        </div>
+      )}
+
+      {radiusKm >= 1 && !zones && !scanning && (
         <button
           onClick={() => runScan(false)}
           style={{

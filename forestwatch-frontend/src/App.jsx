@@ -830,15 +830,16 @@ export default function App() {
 {activeTab === 'compare' && compareResult && !loading && (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
     <ComparePanel
-      data={compareResult}
-      loading={loading}
-      onShowSat={() => setShowSatCompare(true)}
-      resolvedYearA={resolveYear(yearA)}
-      resolvedYearB={resolveYear(yearB)}
-      onFlyToZone={handleZoneFlyTo}
-      onShowZoneSatCompare={handleZoneShowSatCompare}
-      onSetZoneCircle={handleZoneSetCircle}
-    />
+  data={compareResult}
+  loading={loading}
+  onShowSat={() => setShowSatCompare(true)}
+  resolvedYearA={resolveYear(yearA)}
+  resolvedYearB={resolveYear(yearB)}
+  radiusKm={radiusKm}
+  onFlyToZone={handleZoneFlyTo}
+  onShowZoneSatCompare={handleZoneShowSatCompare}
+  onSetZoneCircle={handleZoneSetCircle}
+/>
     <SaveParcelButton
       mode="compare"
       lat={selectedPoint[0]}
