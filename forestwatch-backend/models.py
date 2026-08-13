@@ -143,20 +143,21 @@ class GeminiZoneAnalysis(BaseModel):
     discard_reason:       Optional[str]  # null or reason string
 
 class HotZonesRequest(BaseModel):
-    """Request to scan a forest grid and find the worst-hit zones."""
-    forest_name:   str
+    """Request to scan either a named forest, or a custom parcel by lat/lng/radius."""
+    forest_name:   Optional[str]   = None   # set this OR (lat + lng), not both
+    lat:           Optional[float] = None
+    lng:           Optional[float] = None
     year_a:        int
     year_b:        int
     radius_km:     float = 2.0
-    force_refresh: bool  = False  # bypass 7-day cache when True
-    # Optional date-range overrides (for monthly 2026 composites)
+    force_refresh: bool  = False
     date_start_a: Optional[str] = None
     date_end_a:   Optional[str] = None
     label_a:      Optional[str] = None
     date_start_b: Optional[str] = None
     date_end_b:   Optional[str] = None
     label_b:      Optional[str] = None
-
+    parcel_name:   Optional[str]   = None   # display name when scanning by lat/lng instead of forest_name
 
 class HotZone(BaseModel):
     """A single high-loss zone found by the grid scan."""
@@ -191,7 +192,7 @@ class HotZone(BaseModel):
 class HotZonesResponse(BaseModel):
     """Response from the /hotzones endpoint."""
     zones:                List[HotZone]
-    forest_name:          str
+    forest_name:          Optional[str] = None   # was: str, now optional for parcel scans
     year_a:               int
     year_b:               int
     label_a:              Optional[str] = None

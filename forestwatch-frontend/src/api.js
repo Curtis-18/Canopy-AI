@@ -30,5 +30,8 @@ export const getPhoto = (lat, lng, year_a, year_b) =>
 export const scanHotZones = (forest_name, year_a, year_b, radius_km = 2, opts = {}) =>
   api('POST', '/hotzones', { forest_name, year_a, year_b, radius_km, ...opts })
 
+export const scanParcelHotZones = (lat, lng, year_a, year_b, radius_km = 2, opts = {}) =>
+  api('POST', '/hotzones', { lat, lng, year_a, year_b, radius_km, ...opts })
+
 export const getInsight = (data) =>
   api('POST', '/insight', data)

@@ -175,23 +175,12 @@ export default function App() {
     if (activeTab === 'hotzones') setResultsOpen(true)
   }, [activeTab])
 
-  const handleHotZoneFlyTo = (lat, lng) => {
-    setFlyToPoint([lat, lng, 16])
-    setHotZoneCircle({ lat, lng })
-    setSelectedPoint([lat, lng])
+  const handleZoneFlyTo = (lat, lng) => setFlyToPoint([lat, lng, 16])
+  const handleZoneShowSatCompare = (satData, tiles) => {
+    if (!satData) { setHotZoneSatData(null); return }
+    setHotZoneSatData({ ...satData, tiles })
   }
-
-  const handleHotZoneCompare = (zoneData, tiles) => {
-    if (!zoneData) {
-      setHotZoneSatData(null)
-      return
-    }
-
-    setHotZoneSatData({
-      ...zoneData,
-      tiles,
-    })
-  }
+  const handleZoneSetCircle = (c) => setHotZoneCircle(c)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -687,9 +676,9 @@ export default function App() {
           {/* Hot Zones */}
           {activeTab === 'hotzones' && (
             <HotZonesPanel
-              onFlyTo={handleHotZoneFlyTo}
-              onShowSatCompare={handleHotZoneCompare}
-              onSetCircle={setHotZoneCircle}
+              onFlyTo={handleZoneFlyTo}
+              onShowSatCompare={handleZoneShowSatCompare}
+              onSetCircle={handleZoneSetCircle}
             />
           )}
         </div>
@@ -844,6 +833,11 @@ export default function App() {
       data={compareResult}
       loading={loading}
       onShowSat={() => setShowSatCompare(true)}
+      resolvedYearA={resolveYear(yearA)}
+      resolvedYearB={resolveYear(yearB)}
+      onFlyToZone={handleZoneFlyTo}
+      onShowZoneSatCompare={handleZoneShowSatCompare}
+      onSetZoneCircle={handleZoneSetCircle}
     />
     <SaveParcelButton
       mode="compare"
@@ -867,7 +861,7 @@ export default function App() {
         {/* Map */}
         <div style={{ flex: 1, position: 'relative' }}>
           <Map
-            selectedPoint={activeTab !== 'hotzones' ? selectedPoint : hotZoneCircle ? [hotZoneCircle.lat, hotZoneCircle.lng] : null}
+            selectedPoint={hotZoneCircle ? [hotZoneCircle.lat, hotZoneCircle.lng] : (activeTab !== 'hotzones' ? selectedPoint : null)}
             alertLevel={analyzeResult?.alert?.level || compareResult?.alert?.level}
             onMapClick={handleMapClick}
             radiusKm={activeTab === 'hotzones' ? 2 : radiusKm}
@@ -900,7 +894,7 @@ export default function App() {
             />
           )}
           {/* Hot Zones satellite comparison panel */}
-          {hotZoneSatData && activeTab === 'hotzones' && (
+          {hotZoneSatData && (activeTab === 'hotzones' || activeTab === 'compare') && (
             <SatelliteComparePanel
               yearA={hotZoneSatData.yearA}
               yearB={hotZoneSatData.yearB}

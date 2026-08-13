@@ -901,6 +901,22 @@ def get_forest_grid(forest_name: str, n: int = 5) -> list[tuple[float, float]]:
     return points
 
 
+def get_grid_around_point(lat: float, lng: float, radius_km: float, n: int = 5) -> list[tuple[float, float]]:
+    """Return n×n evenly-spaced sample points spanning radius_km around an
+    arbitrary lat/lng, matching get_forest_grid's spacing logic but for a
+    user-selected parcel instead of a named forest.
+    """
+    half_deg = radius_km / 111.0   # km to degrees, same approximation as get_forest_grid
+    step = (2 * half_deg) / (n - 1) if n > 1 else 0
+    points: list[tuple[float, float]] = []
+    for i in range(n):
+        plat = lat - half_deg + i * step
+        for j in range(n):
+            plng = lng - half_deg + j * step
+            points.append((plat, plng))
+    return points
+
+
 # ============================================================================
 # GEMINI VISION — TILE HELPERS & ZONE ANALYSIS
 # ============================================================================

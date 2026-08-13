@@ -146,7 +146,7 @@ function ForestTypeBadge({ type }) {
 
 
 // ── Zone card ─────────────────────────────────────────────────────────────────
-function ZoneCard({ zone, rank, yearA, yearB, selected, loadingTiles, onClick }) {
+export function ZoneCard({ zone, rank, yearA, yearB, selected, loadingTiles, onClick }) {
   const severity = zone.canopy_loss_severity
   const sc = SEVERITY_COLORS[severity] || SEVERITY_COLORS.None
   const hasGemini = zone.is_forest_zone !== null && zone.is_forest_zone !== undefined
@@ -288,13 +288,13 @@ function ZoneCard({ zone, rank, yearA, yearB, selected, loadingTiles, onClick })
 
 
 // ── AI Vision loading state ───────────────────────────────────────────────────
-function ScanningLoader({ yearA, yearB }) {
+export function ScanningLoader({ yearA, yearB }) {
   const TOTAL_SECS = 105  // ~25 zones × 4 s + GEE overhead
   const [secsLeft, setSecsLeft] = useState(TOTAL_SECS)
   const intervalRef = useRef(null)
 
   useEffect(() => {
-    setSecsLeft(TOTAL_SECS)
+    
     intervalRef.current = setInterval(() => {
       setSecsLeft(s => {
         if (s <= 1) { clearInterval(intervalRef.current); return 0 }
@@ -429,7 +429,7 @@ export default function HotZonesPanel({ onFlyTo, onShowSatCompare, onSetCircle }
         cached: result.cached || false,
         cached_at: result.cached_at || null,
       })
-    } catch (e) {
+    } catch  {
       setError('Scan failed. Is the backend running?')
     } finally {
       setScanning(false)

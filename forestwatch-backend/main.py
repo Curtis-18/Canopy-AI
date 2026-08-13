@@ -32,6 +32,7 @@ from analyzer import (
     km_to_area_ha,
     get_forest_name,
     generate_forest_insight,
+    get_grid_around_point,
 )
 
 # ============================================================================
@@ -321,8 +322,8 @@ _CACHE_FILE = Path(__file__).parent / "hotzones_cache.json"
 _CACHE_TTL_DAYS = 7
 
 
-def _cache_key(forest_name: str, year_a: int, year_b: int) -> str:
-    safe = forest_name.replace(" ", "_").replace("/", "-")
+def _cache_key(scope: str, year_a: int, year_b: int) -> str:
+    safe = scope.replace(" ", "_").replace("/", "-")
     return f"{safe}_{year_a}_{year_b}"
 
 
@@ -367,7 +368,8 @@ def _write_hotzones_cache(key: str, payload: dict):
 
 @app.post("/hotzones", response_model=HotZonesResponse)
 async def scan_hot_zones(req: HotZonesRequest):
-    """Scan a 5×5 grid across a forest and return the top genuine forest loss zones.
+    """Scan a 5×5 grid — either a known forest, or a custom parcel by lat/lng —
+    and return the top genuine forest loss zones.
 
     4-step pipeline (quota-efficient):
       1. Cache check  — return instantly if < 7 days old (0 GEE / 0 Gemini calls)
@@ -378,27 +380,37 @@ async def scan_hot_zones(req: HotZonesRequest):
     t0 = time.time()
     loop = asyncio.get_event_loop()
 
-    print(f"➔ /hotzones: forest={req.forest_name!r} "
+    # ── resolve scan mode: named forest, or custom parcel by lat/lng ──
+    if req.forest_name:
+        if req.forest_name not in FORESTS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown forest_name {req.forest_name!r}. Valid: {sorted(FORESTS.keys())}",
+            )
+        scope_key    = req.forest_name.replace(" ", "_").replace("/", "-")
+        display_name = req.forest_name
+    else:
+        if req.lat is None or req.lng is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Provide either forest_name, or both lat and lng for a custom parcel scan.",
+            )
+        scope_key    = f"pt_{round(req.lat, 4)}_{round(req.lng, 4)}_{req.radius_km}"
+        display_name = req.parcel_name or f"Custom parcel ({req.lat:.4f}, {req.lng:.4f})"
+
+    print(f"➔ /hotzones: scope={display_name!r} "
           f"year_a={req.year_a} year_b={req.year_b} "
           f"force_refresh={req.force_refresh}")
-
-    # ── validate forest name ──
-    if req.forest_name not in FORESTS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Unknown forest_name {req.forest_name!r}. Valid: {sorted(FORESTS.keys())}",
-        )
 
     # ────────────────────────────────────────────────────
     # STEP 1: Cache check
     # ────────────────────────────────────────────────────
-    ckey = _cache_key(req.forest_name, req.year_a, req.year_b)
+    ckey = _cache_key(scope_key, req.year_a, req.year_b)
     if not req.force_refresh:
         cached = _read_hotzones_cache(ckey)
         if cached:
             print(f"✓ Returning cached hotzones ({ckey}) — "
                   f"saved at {cached['cached_at']}")
-            # Reconstruct the full response from cache
             zones = [HotZone(**z) for z in cached["zones"]]
             return HotZonesResponse(
                 zones=zones,
@@ -420,7 +432,10 @@ async def scan_hot_zones(req: HotZonesRequest):
     # STEP 2a: Build grid + run 50 GEE NDVI calls concurrently
     # ────────────────────────────────────────────────────
     try:
-        grid = get_forest_grid(req.forest_name, n=5)  # 25 points
+        if req.forest_name:
+            grid = get_forest_grid(req.forest_name, n=5)  # 25 points
+        else:
+            grid = get_grid_around_point(req.lat, req.lng, req.radius_km, n=5)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -461,7 +476,7 @@ async def scan_hot_zones(req: HotZonesRequest):
     # ────────────────────────────────────────────────────
     # STEP 2b: WorldCover pre-filter + build raw zone records
     # ────────────────────────────────────────────────────
-    raw_zones         = []   # zones that passed GEE + WorldCover
+    raw_zones         = []
     skipped_gee       = 0
     wc_filtered_count = 0
 
@@ -470,7 +485,6 @@ async def scan_hot_zones(req: HotZonesRequest):
             skipped_gee += 1
             continue
 
-        # WorldCover pre-filter: discard non-forest land-cover classes
         if not wc.get("is_forest_candidate", True):
             wc_filtered_count += 1
             print(f"  ✘ WorldCover ({lat:.4f},{lng:.4f}): "
@@ -517,7 +531,7 @@ async def scan_hot_zones(req: HotZonesRequest):
             status_code=422,
             detail=(
                 f"All grid points failed or were non-forest for "
-                f"{req.forest_name!r} {req.year_a}→{req.year_b}. "
+                f"{display_name!r} {req.year_a}→{req.year_b}. "
                 "GEE may have no imagery or WorldCover shows no tree cover here."
             ),
         )
@@ -526,7 +540,7 @@ async def scan_hot_zones(req: HotZonesRequest):
     # STEP 3: NDVI pre-rank — take top 8 by forest_lost_pct before Gemini
     # ────────────────────────────────────────────────────
     raw_zones.sort(key=lambda z: z["forest_lost_pct"], reverse=True)
-    gemini_candidates = raw_zones[:8]  # Gemini sees at most 8 zones
+    gemini_candidates = raw_zones[:8]
 
     print(f"✓ NDVI pre-rank: {len(raw_zones)} → {len(gemini_candidates)} candidates "
           f"sent to Gemini Vision")
@@ -560,7 +574,7 @@ async def scan_hot_zones(req: HotZonesRequest):
     gemini_results: list[dict | None] = []
     for i, (zone, (url_a, url_b)) in enumerate(zip(gemini_candidates, tile_results)):
         if i > 0:
-            await asyncio.sleep(4)  # free-tier ~15 RPM
+            await asyncio.sleep(4)
         if not url_a or not url_b:
             print(f"  ⏩ Zone {i+1}/{len(gemini_candidates)} "
                   f"({zone['lat']:.4f},{zone['lng']:.4f}): no tile URLs")
@@ -583,7 +597,6 @@ async def scan_hot_zones(req: HotZonesRequest):
 
     for zone, gemini_res in zip(gemini_candidates, gemini_results):
         if gemini_res is None:
-            # Tile/Gemini failure — retain with no Gemini fields, rank last
             zone.update({
                 "gemini_rank": None, "is_forest_zone": None,
                 "forest_loss_detected": None, "forest_type": None,
@@ -616,7 +629,6 @@ async def scan_hot_zones(req: HotZonesRequest):
         })
         confirmed_zones.append(zone)
 
-    # Rank by severity → estimated_loss_pct
     def _sort_key(z):
         sev  = SEVERITY_RANK.get(z.get("canopy_loss_severity") or "None", 0)
         loss = z.get("estimated_loss_pct") or 0
@@ -641,7 +653,7 @@ async def scan_hot_zones(req: HotZonesRequest):
     # STEP 4d: Save to 7-day cache
     # ────────────────────────────────────────────────────
     cache_payload = {
-        "forest_name":        req.forest_name,
+        "forest_name":        display_name,
         "year_a":             req.year_a,
         "year_b":             req.year_b,
         "label_a":            req.label_a or str(req.year_a),
@@ -658,7 +670,7 @@ async def scan_hot_zones(req: HotZonesRequest):
 
     return HotZonesResponse(
         zones=hot_zones,
-        forest_name=req.forest_name,
+        forest_name=display_name,
         year_a=req.year_a,
         year_b=req.year_b,
         label_a=req.label_a or str(req.year_a),
