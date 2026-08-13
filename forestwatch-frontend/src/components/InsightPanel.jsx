@@ -25,7 +25,7 @@ export default function InsightPanel({ analysisData }) {
       } else {
         setError(res.error || 'No insight returned')
       }
-    } catch (e) {
+    } catch  {
       setError('Failed to reach AI service. Try again later.')
     } finally {
       setLoading(false)

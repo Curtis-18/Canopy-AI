@@ -25,6 +25,7 @@ export default function ComparePanel({ data, loading, onShowSat }) {
 
   const lost   = data.forest_lost_pct
   const lostHa = data.forest_lost_ha
+  const classification = lost > 2 ? 'Degraded' : lost < -2 ? 'Regrowth' : 'Stable'
   const labelA = data.label_a || String(data.year_a)
   const labelB = data.label_b || String(data.year_b)
 
@@ -74,6 +75,21 @@ export default function ComparePanel({ data, loading, onShowSat }) {
           marginBottom: 8,
         }}>
           {lost > 0 ? `▼ ${lost}%` : `▲ ${Math.abs(lost)}%`}
+        </div>
+        <div style={{
+          display: 'inline-block',
+          padding: '4px 12px',
+          borderRadius: 20,
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: 0.5,
+          marginBottom: 8,
+          fontFamily: "'Space Mono', monospace",
+          color: classification === 'Degraded' ? '#ef4444' : classification === 'Regrowth' ? '#22c55e' : '#f59e0b',
+          background: classification === 'Degraded' ? 'rgba(239,68,68,0.12)' : classification === 'Regrowth' ? 'rgba(34,197,94,0.12)' : 'rgba(245,158,11,0.12)',
+          border: `1px solid ${classification === 'Degraded' ? 'rgba(239,68,68,0.3)' : classification === 'Regrowth' ? 'rgba(34,197,94,0.3)' : 'rgba(245,158,11,0.3)'}`,
+        }}>
+          {classification.toUpperCase()}
         </div>
         <div style={{ fontSize: 13, color: '#cbd5e1', lineHeight: 1.5, fontWeight: 500 }}>
           {lostHa > 0

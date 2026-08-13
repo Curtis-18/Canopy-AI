@@ -14,6 +14,7 @@ import SatelliteComparePanel from './components/SatelliteComparePanel'
 import StatsPanel from './components/StatsPanel'
 import TimeSeriesPanel from './components/TimeSeriesPanel'
 
+const formatRadius = (km) => km < 1 ? `${Math.round(km * 1000)}m` : `${km}km`
 export default function App() {
   const { user, signOut } = useAuth()
 
@@ -27,6 +28,8 @@ export default function App() {
   const [year, setYear] = useState(2024)
   const [yearA, setYearA] = useState('')
   const [yearB, setYearB] = useState('')
+  const [manualLat, setManualLat] = useState('')
+  const [manualLng, setManualLng] = useState('')
   const [radiusKm, setRadiusKm] = useState(5)
   const [error, setError] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -59,6 +62,14 @@ export default function App() {
     setFlyToPoint(null)
   }
 
+  const handleManualGo = () => {
+    const lat = parseFloat(manualLat)
+    const lng = parseFloat(manualLng)
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return
+    handleMapClick(lat, lng)
+    setFlyToPoint([lat, lng, 14])
+  }
 
   // Search: update suggestions as user types
   useEffect(() => {
@@ -407,6 +418,53 @@ export default function App() {
             )}
           </div>
 
+          {/* Manual coordinate entry */}
+          <div style={{ padding: '0 16px 12px', borderBottom: '1px solid rgba(34,197,94,0.08)' }}>
+            <div style={{
+              fontFamily: "'Space Mono', monospace",
+              fontSize: 9.5,
+              color: '#4b5563',
+              letterSpacing: 1,
+              marginBottom: 6,
+            }}>
+              OR ENTER COORDINATES
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="number" step="any" placeholder="Lat"
+                value={manualLat} onChange={e => setManualLat(e.target.value)}
+                style={{
+                  flex: 1, minWidth: 0, padding: '8px 10px',
+                  background: 'rgba(34,197,94,0.08)', border: '1.5px solid rgba(34,197,94,0.25)',
+                  borderRadius: 8, color: '#e2f5e8', fontFamily: "'Inter', sans-serif",
+                  fontSize: 12, outline: 'none',
+                }}
+              />
+              <input
+                type="number" step="any" placeholder="Lng"
+                value={manualLng} onChange={e => setManualLng(e.target.value)}
+                style={{
+                  flex: 1, minWidth: 0, padding: '8px 10px',
+                  background: 'rgba(34,197,94,0.08)', border: '1.5px solid rgba(34,197,94,0.25)',
+                  borderRadius: 8, color: '#e2f5e8', fontFamily: "'Inter', sans-serif",
+                  fontSize: 12, outline: 'none',
+                }}
+              />
+              <button
+                onClick={handleManualGo} disabled={!manualLat || !manualLng}
+                style={{
+                  padding: '8px 14px',
+                  background: 'linear-gradient(135deg, rgba(34,197,94,0.25) 0%, rgba(22,163,74,0.2) 100%)',
+                  border: '1px solid rgba(34,197,94,0.4)', borderRadius: 8, color: '#4ade80',
+                  fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: 600,
+                  cursor: (!manualLat || !manualLng) ? 'default' : 'pointer',
+                }}
+              >
+                Go
+              </button>
+            </div>
+          </div>
+
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid rgba(34,197,94,0.08)', padding: '8px 0' }}>
             {[['analyze', '🔍 Analyze'], ['compare', '📊 Compare'], ['hotzones', '🔥 Hot Zones']].map(([key, label]) => (
@@ -464,8 +522,8 @@ export default function App() {
                   letterSpacing: 1,
                   fontWeight: 600
                 }}>
-                  RADIUS — <span style={{ color: '#22c55e', fontWeight: 700 }}>{radiusKm}</span> km
-                  <input type="range" min={2} max={20} value={radiusKm}
+                  RADIUS — <span style={{ color: '#22c55e', fontWeight: 700 }}>{formatRadius(radiusKm)}</span>
+                  <input type="range" min={0.1} max={20} step={0.1} value={radiusKm}
                     onChange={e => setRadiusKm(+e.target.value)}
                     style={{
                       display: 'block',
