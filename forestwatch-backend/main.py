@@ -364,7 +364,7 @@ def _write_hotzones_cache(key: str, payload: dict):
 # ============================================================================
 # HOT ZONES ENDPOINT
 # ============================================================================
-app.post("/hotzones", response_model=HotZonesResponse)
+@app.post("/hotzones", response_model=HotZonesResponse)
 async def scan_hot_zones(req: HotZonesRequest):
     """Scan a 5×5 grid — either a known forest, or a custom parcel by lat/lng —
     and return the top genuine forest loss zones.
