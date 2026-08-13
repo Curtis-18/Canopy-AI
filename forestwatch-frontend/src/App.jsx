@@ -515,25 +515,62 @@ export default function App() {
                     )}
                   </select>
                 </label>
-                <label style={{
-                  fontSize: 11,
-                  color: '#4b5563',
-                  fontFamily: "'Space Mono', monospace",
-                  letterSpacing: 1,
-                  fontWeight: 600
-                }}>
-                  RADIUS — <span style={{ color: '#22c55e', fontWeight: 700 }}>{formatRadius(radiusKm)}</span>
-                  <input type="range" min={0.1} max={20} step={0.1} value={radiusKm}
-                    onChange={e => setRadiusKm(+e.target.value)}
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{
+                    fontSize: 11,
+                    color: '#4b5563',
+                    fontFamily: "'Space Mono', monospace",
+                    letterSpacing: 1,
+                    fontWeight: 600,
+                    marginBottom: 8,
+                  }}>
+                    RADIUS — <span style={{ color: '#22c55e', fontWeight: 700 }}>{formatRadius(radiusKm)}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    {[0.1, 0.5, 1, 2, 5, 10, 20].map(preset => (
+                      <button
+                        key={preset}
+                        onClick={() => setRadiusKm(preset)}
+                        style={{
+                          padding: '5px 10px',
+                          background: radiusKm === preset ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${radiusKm === preset ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                          borderRadius: 6,
+                          color: radiusKm === preset ? '#4ade80' : '#9ca3af',
+                          fontFamily: "'Inter', sans-serif",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {formatRadius(preset)}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    min={0.1}
+                    max={20}
+                    step={0.1}
+                    value={radiusKm}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value)
+                      if (!Number.isNaN(v)) setRadiusKm(Math.min(20, Math.max(0.1, v)))
+                    }}
                     style={{
-                      display: 'block',
                       width: '100%',
-                      marginTop: 8,
-                      accentColor: '#22c55e',
-                      cursor: 'pointer'
+                      padding: '9px 12px',
+                      background: 'rgba(34,197,94,0.08)',
+                      border: '1.5px solid rgba(34,197,94,0.25)',
+                      borderRadius: 8,
+                      color: '#e2f5e8',
+                      fontFamily: "'Inter', sans-serif",
+                      fontSize: 13,
+                      outline: 'none',
+                      boxSizing: 'border-box',
                     }}
                   />
-                </label>
+                </div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -566,25 +603,62 @@ export default function App() {
                     </select>
                   </label>
                 ))}
-                <label style={{
-                  fontSize: 11,
-                  color: '#4b5563',
-                  fontFamily: "'Space Mono', monospace",
-                  letterSpacing: 1,
-                  fontWeight: 600
-                }}>
-                  RADIUS — <span style={{ color: '#22c55e', fontWeight: 700 }}>{radiusKm}</span> km
-                  <input type="range" min={2} max={20} value={radiusKm}
-                    onChange={e => setRadiusKm(+e.target.value)}
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{
+                    fontSize: 11,
+                    color: '#4b5563',
+                    fontFamily: "'Space Mono', monospace",
+                    letterSpacing: 1,
+                    fontWeight: 600,
+                    marginBottom: 8,
+                  }}>
+                    RADIUS — <span style={{ color: '#22c55e', fontWeight: 700 }}>{formatRadius(radiusKm)}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    {[0.1, 0.5, 1, 2, 5, 10, 20].map(preset => (
+                      <button
+                        key={preset}
+                        onClick={() => setRadiusKm(preset)}
+                        style={{
+                          padding: '5px 10px',
+                          background: radiusKm === preset ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${radiusKm === preset ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                          borderRadius: 6,
+                          color: radiusKm === preset ? '#4ade80' : '#9ca3af',
+                          fontFamily: "'Inter', sans-serif",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {formatRadius(preset)}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    min={0.1}
+                    max={20}
+                    step={0.1}
+                    value={radiusKm}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value)
+                      if (!Number.isNaN(v)) setRadiusKm(Math.min(20, Math.max(0.1, v)))
+                    }}
                     style={{
-                      display: 'block',
                       width: '100%',
-                      marginTop: 8,
-                      accentColor: '#22c55e',
-                      cursor: 'pointer'
+                      padding: '9px 12px',
+                      background: 'rgba(34,197,94,0.08)',
+                      border: '1.5px solid rgba(34,197,94,0.25)',
+                      borderRadius: 8,
+                      color: '#e2f5e8',
+                      fontFamily: "'Inter', sans-serif",
+                      fontSize: 13,
+                      outline: 'none',
+                      boxSizing: 'border-box',
                     }}
                   />
-                </label>
+                </div>
                 
                 <button
                   onClick={() => setShowTimeSeries(true)}
