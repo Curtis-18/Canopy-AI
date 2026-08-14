@@ -10,6 +10,7 @@ import HotZonesPanel from './components/HotZonesPanel'
 import InsightPanel from './components/InsightPanel'
 import Map from './components/Map'
 import SaveParcelButton from './components/SaveParcelButton'
+import SavedParcelsPicker from './components/SavedParcelsPicker'
 import SatelliteComparePanel from './components/SatelliteComparePanel'
 import StatsPanel from './components/StatsPanel'
 import TimeSeriesPanel from './components/TimeSeriesPanel'
@@ -73,6 +74,16 @@ export default function App() {
     if (Number.isNaN(lat) || Number.isNaN(lng)) return
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return
 
+    handleMapClick(lat, lng)
+    setFlyToPoint([lat, lng, 14])
+  }
+
+  const handleSelectSavedParcel = (parcel) => {
+    const lat = Number(parcel.lat)
+    const lng = Number(parcel.lng)
+    setManualLat(String(lat))
+    setManualLng(String(lng))
+    if (parcel.radius_km) setRadiusKm(Number(parcel.radius_km))
     handleMapClick(lat, lng)
     setFlyToPoint([lat, lng, 14])
   }
@@ -560,6 +571,9 @@ export default function App() {
               </button>
             </div>
           </div>
+          <SavedParcelsPicker onSelect={handleSelectSavedParcel} />
+
+          
 
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid rgba(34,197,94,0.08)', padding: '8px 0' }}>

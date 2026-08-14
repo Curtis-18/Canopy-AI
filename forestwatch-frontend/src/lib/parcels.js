@@ -45,3 +45,13 @@ export async function saveCompareAsParcel({ name, lat, lng, radiusKm, yearA, sta
   const scanB = await createScan(parcel.id, { year: yearB, stats: statsB, alertLevel, riskScore, raw })
   return { parcel, scanA, scanB }
 }
+
+export async function getSavedParcels() {
+  const { data, error } = await supabase
+    .from('parcels')
+    .select('id, name, lat, lng, radius_km, created_at')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data
+}
